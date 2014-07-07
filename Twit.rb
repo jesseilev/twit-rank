@@ -1,4 +1,46 @@
 
+
+# Fetches data from Twitter using the Twitter API
+class TwitterRequestor
+    
+    def initialize
+        get_token
+    end
+    
+    # Use cURL to request an authorization token from Twitter
+    def get_token
+        
+        #TODO
+    end
+    
+    # Use cURL to ask Twitter for user's "friends". Return an array with the results
+    def request_leaders(uid)
+        
+        #TODO
+        []
+    end
+    
+    # Use cURL to ask Twitter for user's "followers". Return an array with the results
+    def request_followers(uid)
+        
+        #TODO
+        []
+    end
+    
+    # Use cURL to get the username associated with an id number
+    def request_username(uid)
+        
+        #TODO
+    end
+    
+    # Use cURL to get the id number associated with a username
+    def request_uid(username)
+        
+        #TODO
+    end
+    
+end
+
 class User
 
     def initialize( name, uid )
@@ -56,45 +98,12 @@ end
 
 class TwitterGraph
 
-    def initialize( leaders_hash )
+    def initialize( users )
         # hash :uid => User
-        @users = {}
+        @users = users
         
         # hash :uid => twit_rank
         @scores = {}
-        
-        # hash :name => uid
-        @uids_hash = {}
-        
-        #Iterate twice over leadersHash
-        #First time, create all the users
-        next_uid = 0
-        leaders_hash.keys.each do |name, leaders|
-            new_user = User.new(name, next_uid)
-            @users[next_uid] = new_user
-            @uids_hash[new_user.name] = new_user.uid
-
-            new_user.twit_rank = 1.0 / Float(leaders_hash.keys.count)
-            @scores[new_user.uid] = new_user.twit_rank
-            
-            next_uid += 1
-        end
-        
-        #Second time, make them follow each other
-        leaders_hash.each do |follower_name, leaders|
-            follower = @users[@uids_hash[follower_name]]
-            leaders.each do |leader_name|
-                leader = @users[@uids_hash[leader_name]]
-                follower.follow leader
-            end
-            
-            #If a user is not following anybody, then we pretend he is following EVERYBODY. "When calculating PageRank, pages with no outbound links are assumed to link out to all other pages in the collection. Their PageRank scores are therefore divided evenly among all other pages."
-            if (leaders.count == 0)
-                users.each do |uid, user|
-                    follower.follow user
-                end
-            end
-        end
         
     end
     
@@ -138,24 +147,68 @@ class TwitterGraph
     end
 end
 
-# For each user, the names of the users he follows
-leaders_hash = {
-                    'A' => [],
-                    'B' => ['C'],
-                    'C' => ['B'],
-                    'D' => ['A', 'B'],
-                    'E' => ['B', 'D', 'F'],
-                    'F' => ['B', 'E'],
-                    'G' => ['B', 'E'],
-                    'H' => ['B', 'E'],
-                    'I' => ['B', 'E'],
-                    'J' => ['E'],
-                    'K' => ['E']
-                }
 
-graph = TwitterGraph.new(leaders_hash)
+# Provides convenience contructors for creating a TwitterGraph in a variety of ways
+class GraphConstructor
+    
+    def initialize
+    end
+    
+    #You provide a Hash of the form  { :user_name => names_of_this_person's_leaders[] }
+    def graph_with_leaders_hash(leaders_hash)
+        # Generate a set of User objects that follow each other as specified by leaders_hash
+        users = {}
+        uids_hash = {}
+        # Iterate twice over @leaders_hash
+        # First time, create all the users
+        next_uid = 0
+        leaders_hash.keys.each do |name, leaders|
+            new_user = User.new(name, next_uid)
+            users[next_uid] = new_user
+            uids_hash[new_user.name] = new_user.uid
+            
+            new_user.twit_rank = 1.0 / Float(leaders_hash.keys.count)
+            
+            next_uid += 1
+        end
+            
+        # Second time, make them follow each other
+        leaders_hash.each do |follower_name, leaders|
+            follower = users[uids_hash[follower_name]]
+            leaders.each do |leader_name|
+                leader = users[uids_hash[leader_name]]
+                follower.follow leader
+            end
+            #If a user is not following anybody, then we pretend he is following EVERYBODY. "When calculating PageRank, pages with no outbound links are assumed to link out to all other pages in the collection. Their PageRank scores are therefore divided evenly among all other pages."
+            if (leaders.count == 0)
+                users.each do |uid, user|
+                    follower.follow user
+                end
+            end
+        end
+        return TwitterGraph.new(users)
+    end
+end
+
+
+wikipedia_example = {
+    'A' => [],
+    'B' => ['C'],
+    'C' => ['B'],
+    'D' => ['A', 'B'],
+    'E' => ['B', 'D', 'F'],
+    'F' => ['B', 'E'],
+    'G' => ['B', 'E'],
+    'H' => ['B', 'E'],
+    'I' => ['B', 'E'],
+    'J' => ['E'],
+    'K' => ['E']
+}
+
+puts 'Give me an initial username. (Omit the "@" sign.)'
+initial_username = gets
+graph = GraphConstructor.new.graph_with_leaders_hash(wikipedia_example)
 graph.compute_scores 35
-
 
 
 
