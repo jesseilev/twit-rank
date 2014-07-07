@@ -1,6 +1,5 @@
 
-
-# Fetches data from Twitter using the Twitter API
+# Communicates with Twitter's API
 class TwitterRequestor
     
     def initialize
@@ -27,20 +26,23 @@ class TwitterRequestor
         []
     end
     
-    # Use cURL to get the username associated with an id number
+    # Use cURL to request and return the username associated with an id number
     def request_username(uid)
         
         #TODO
+        ''
     end
     
-    # Use cURL to get the id number associated with a username
+    # Use cURL to request and return the id number associated with a username
     def request_uid(username)
         
         #TODO
+        0
     end
     
 end
 
+# A representation of a Twitter user
 class User
 
     def initialize( name, uid )
@@ -96,6 +98,7 @@ class User
     
 end
 
+# A connected graph of Users who follow each other. Can run the PageRank algorithm on itself to calculate the twit_rank scores of each User
 class TwitterGraph
 
     def initialize( users )
@@ -145,6 +148,11 @@ class TwitterGraph
     def users
         @users
     end
+    
+    def scores
+        @scores
+    end
+    
 end
 
 
@@ -154,7 +162,49 @@ class GraphConstructor
     def initialize
     end
     
-    #You provide a Hash of the form  { :user_name => names_of_this_person's_leaders[] }
+    # Build and return a graph of REAL Users, starting with seed_username
+    def graph_with_initial_username(seed_username, graph_size)
+        users = {}
+        uids_hash = {}
+        requestor = TwitterRequestor.new
+        seed_uid = requestor.request_uid(seed_username)
+        seed_user = User.new( seed_username, seed_uid)
+        users[seed_uid] = seed_user
+        while (users.keys.count < graph_size) do
+            # Choose a random User from our current set
+            rand_user = users.keys.sample
+            # Choose a random "graph edge" from among rand_user's followers and leaders
+            possible_connections = (rand_user.followers << rand_user.leaders).to_set
+            rand_connection = possible_connections.sample
+            # If this follower/leader does not already belong to our current set,
+            if !users.keys.include?(rand_connection)
+                # ...then we add him
+                new_user_name = requestor.request_username(rand_connection)
+                new_user = User.new(new_user_name, rand_connection)
+                users[new_user.uid] = new_user
+                # And with the introduction of a new User, we must connect any newly created graph edges
+                new_user_followers = requestor.request_followers(new_user.uid)
+                new_user_leaders = requestor.request_leaders(new_user.uid)
+                new_user_followers.each do |follower|
+                    if users.keys.include?(follower.uid)
+                        follower.follow new_user
+                    end
+                end
+                new_user_leaders.each do |leader|
+                    if users.keys.include?(leader.uid)
+                        new_user.follow leader
+                    end
+                end
+            end
+        end
+        return TwitterGraph.new(users)
+    end
+    
+    def graph_from_file(filename)
+        #TODO
+    end
+    
+    # Creates and returns a TwitterGraph with FAKE Users. You provide a Hash of invented Users and their leaders, of the form  { :user_name => names_of_this_person's_leaders[] }. Each User's .uid will be generated automatically.
     def graph_with_leaders_hash(leaders_hash)
         # Generate a set of User objects that follow each other as specified by leaders_hash
         users = {}
@@ -188,27 +238,30 @@ class GraphConstructor
         end
         return TwitterGraph.new(users)
     end
+    
+    def wikipedia_example
+        return {
+            'A' => [],
+            'B' => ['C'],
+            'C' => ['B'],
+            'D' => ['A', 'B'],
+            'E' => ['B', 'D', 'F'],
+            'F' => ['B', 'E'],
+            'G' => ['B', 'E'],
+            'H' => ['B', 'E'],
+            'I' => ['B', 'E'],
+            'J' => ['E'],
+            'K' => ['E']
+        }
+    end
+    
 end
-
-
-wikipedia_example = {
-    'A' => [],
-    'B' => ['C'],
-    'C' => ['B'],
-    'D' => ['A', 'B'],
-    'E' => ['B', 'D', 'F'],
-    'F' => ['B', 'E'],
-    'G' => ['B', 'E'],
-    'H' => ['B', 'E'],
-    'I' => ['B', 'E'],
-    'J' => ['E'],
-    'K' => ['E']
-}
 
 puts 'Give me an initial username. (Omit the "@" sign.)'
 initial_username = gets
-graph = GraphConstructor.new.graph_with_leaders_hash(wikipedia_example)
-graph.compute_scores 35
+graph_constructor = GraphConstructor.new
+twitter_graph = graph_constructor.graph_with_leaders_hash(graph_constructor.wikipedia_example)
+twitter_graph.compute_scores 35
 
 
 
