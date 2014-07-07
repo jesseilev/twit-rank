@@ -1,4 +1,5 @@
 
+
 # Communicates with Twitter's API
 class TwitterRequestor
     
@@ -26,15 +27,15 @@ class TwitterRequestor
         []
     end
     
-    # Use cURL to request and return the username associated with an id number
-    def request_username(uid)
+    # Use cURL to request and return the screen_name associated with an id number
+    def request_screen_name(uid)
         
         #TODO
         ''
     end
     
-    # Use cURL to request and return the id number associated with a username
-    def request_uid(username)
+    # Use cURL to request and return the id number associated with a screen_name
+    def request_uid(screen_name)
         
         #TODO
         0
@@ -45,9 +46,9 @@ end
 # A representation of a Twitter user
 class User
 
-    def initialize( name, uid )
-        puts 'Creating a new user named ' + name
-        @name = name
+    def initialize( screen_name, uid )
+        puts 'Creating a new user named ' + screen_name
+        @screen_name = screen_name
         @uid = uid
         @followers = []
         @leaders = []
@@ -64,13 +65,13 @@ class User
             return
         end
         
-        puts self.name + ' has begun following ' + other_user.name + ' .'
+        puts self.screen_name + ' follows ' + other_user.screen_name + ' .'
         self.leaders << other_user.uid
         other_user.followers << self.uid
     end
     
-    def name
-        @name
+    def screen_name
+        @screen_name
     end
     
     def uid
@@ -93,7 +94,7 @@ class User
         @twit_rank = score
         score_string = '%.3f' % score
         old_score_string = '%.3f' % old_score
-        puts 'old score was ' + old_score_string + ' ' + self.name + ' ' + score_string + ' is new score'
+        puts 'old score -> ' + old_score_string + ' @' + self.screen_name + ' ' + score_string + ' <- new score'
     end
     
 end
@@ -159,30 +160,37 @@ end
 # Provides convenience contructors for creating a TwitterGraph in a variety of ways
 class GraphConstructor
     
+    require 'set'
+
     def initialize
     end
     
-    # Build and return a graph of REAL Users, starting with seed_username
-    def graph_with_initial_username(seed_username, graph_size)
+    # Creates and returns a graph of real Users that includes the User whose screen_name is seed_screen_name. This method uses randomness to build its set of Users, so even when you provide the same parameters, the exact set of Users will vary each time.
+    def graph_with_initial_screen_name(seed_screen_name, graph_size)
         users = {}
         uids_hash = {}
         requestor = TwitterRequestor.new
-        seed_uid = requestor.request_uid(seed_username)
-        seed_user = User.new( seed_username, seed_uid)
+        seed_uid = requestor.request_uid(seed_screen_name)
+        seed_user = User.new( seed_screen_name, seed_uid)
         users[seed_uid] = seed_user
         while (users.keys.count < graph_size) do
+            
             # Choose a random User from our current set
-            rand_user = users.keys.sample
+            rand_user = users[users.keys.sample]
+            
             # Choose a random "graph edge" from among rand_user's followers and leaders
-            possible_connections = (rand_user.followers << rand_user.leaders).to_set
+            possible_connections = (rand_user.followers << rand_user.leaders).flatten
+            possible_connections = possible_connections.to_set.to_a #Eliminate duplicates by converting to a Set (and then back to an Array).
             rand_connection = possible_connections.sample
+            
             # If this follower/leader does not already belong to our current set,
             if !users.keys.include?(rand_connection)
                 # ...then we add him
-                new_user_name = requestor.request_username(rand_connection)
+                new_user_name = requestor.request_screen_name(rand_connection)
                 new_user = User.new(new_user_name, rand_connection)
                 users[new_user.uid] = new_user
-                # And with the introduction of a new User, we must connect any newly created graph edges
+                
+                # And with the introduction of a new User, we must connect any new graph edges
                 new_user_followers = requestor.request_followers(new_user.uid)
                 new_user_leaders = requestor.request_leaders(new_user.uid)
                 new_user_followers.each do |follower|
@@ -195,6 +203,7 @@ class GraphConstructor
                         new_user.follow leader
                     end
                 end
+                
             end
         end
         return TwitterGraph.new(users)
@@ -205,17 +214,17 @@ class GraphConstructor
     end
     
     # Creates and returns a TwitterGraph with FAKE Users. You provide a Hash of invented Users and their leaders, of the form  { :user_name => names_of_this_person's_leaders[] }. Each User's .uid will be generated automatically.
-    def graph_with_leaders_hash(leaders_hash)
+    def graph_with_fake_users(leaders_hash)
         # Generate a set of User objects that follow each other as specified by leaders_hash
         users = {}
         uids_hash = {}
         # Iterate twice over @leaders_hash
         # First time, create all the users
         next_uid = 0
-        leaders_hash.keys.each do |name, leaders|
-            new_user = User.new(name, next_uid)
+        leaders_hash.keys.each do |screen_name, leaders|
+            new_user = User.new(screen_name, next_uid)
             users[next_uid] = new_user
-            uids_hash[new_user.name] = new_user.uid
+            uids_hash[new_user.screen_name] = new_user.uid
             
             new_user.twit_rank = 1.0 / Float(leaders_hash.keys.count)
             
@@ -257,10 +266,10 @@ class GraphConstructor
     
 end
 
-puts 'Give me an initial username. (Omit the "@" sign.)'
-initial_username = gets
+puts 'Give me an initial screen name. (Omit the "@" sign.)'
+initial_screen_name = gets
 graph_constructor = GraphConstructor.new
-twitter_graph = graph_constructor.graph_with_leaders_hash(graph_constructor.wikipedia_example)
+twitter_graph = graph_constructor.graph_with_initial_screen_name(initial_screen_name, 100)
 twitter_graph.compute_scores 35
 
 
