@@ -1,53 +1,68 @@
 
-
 # Communicates with Twitter's API
 class TwitterRequestor
     
+    require 'curb'
+    require 'JSON'
+
     def initialize
         get_token
     end
     
     # Use cURL to request an authorization token from Twitter
     def get_token
-        
-        #TODO
+        @auth_token = "Bearer AAAAAAAAAAAAAAAAAAAAAJUHYgAAAAAAIxSOkTgNkFCGF64JEcRybmLwzfQ%3DNPKjR9hpkWoQw64m7HhtJapzMR6qFuaPV0tborof1ElJe9y97z"
     end
     
     # Use cURL to ask Twitter for user's "friends". Return an array with the results
     def request_leaders(uid)
-        
-        #TODO
-        []
+        url = "https://api.twitter.com/1.1/friends/ids.json?cursor=-1&id=#{uid}"
+        response = send_request(url)
+        leaders = response['ids']
+        leaders = [] if leaders.nil? || leaders.empty?
+        leaders
     end
     
     # Use cURL to ask Twitter for user's "followers". Return an array with the results
     def request_followers(uid)
-        
-        #TODO
-        []
+        url = "https://api.twitter.com/1.1/followers/ids.json?cursor=-1&id=#{uid}"
+        response = send_request(url)
+        followers = response['ids']
+        followers = [] if followers.nil? || followers.empty?
+        followers
     end
     
     # Use cURL to request and return the screen_name associated with an id number
     def request_screen_name(uid)
-        
-        #TODO
-        ''
+        url = "https://api.twitter.com/1.1/users/show.json?user_id=#{uid}"
+        response = send_request(url)
+        name = response['screen_name']
+        name
     end
     
     # Use cURL to request and return the id number associated with a screen_name
     def request_uid(screen_name)
-        
-        #TODO
-        0
+        url = "https://api.twitter.com/1.1/users/show.json?screen_name=#{screen_name}"
+        response = send_request(url)
+        uid = response['id']
+        uid
     end
     
+    private
+    
+    def send_request(url)
+        c = Curl::Easy.perform(url) do |curl|
+            curl.headers["Authorization"] = @auth_token
+        end
+        response = JSON.parse(c.body_str)
+        response
+    end
 end
 
 # A representation of a Twitter user
 class User
-
+    
     def initialize( screen_name, uid )
-        puts 'Creating a new user named ' + screen_name
         @screen_name = screen_name
         @uid = uid
         @followers = []
@@ -94,7 +109,7 @@ class User
         @twit_rank = score
         score_string = '%.3f' % score
         old_score_string = '%.3f' % old_score
-        puts 'old score -> ' + old_score_string + ' @' + self.screen_name + ' ' + score_string + ' <- new score'
+        puts "#{self.screen_name} #{score_string} (#{old_score_string} was old score)"
     end
     
 end
@@ -124,7 +139,6 @@ class TwitterGraph
                     follower = @users[follower_uid]
                     #If my follower has n leaders, I get 1/nth of his score
                     score += follower.twit_rank / Float(follower.leaders.count)
-                    
                 end
                 
                 #Apply damping factor to the resulting score
@@ -165,45 +179,59 @@ class GraphConstructor
     def initialize
     end
     
-    # Creates and returns a graph of real Users that includes the User whose screen_name is seed_screen_name. This method uses randomness to build its set of Users, so even when you provide the same parameters, the exact set of Users will vary each time.
+    # Creates and returns a graph of real Users that includes the User whose .screen_name == seed_screen_name. This method uses randomness to build its set of Users, so even when you provide the same parameters, the exact set of Users will vary each time.
     def graph_with_initial_screen_name(seed_screen_name, graph_size)
         users = {}
         uids_hash = {}
+        followers_hash = {}
+        leaders_hash = {}
         requestor = TwitterRequestor.new
         seed_uid = requestor.request_uid(seed_screen_name)
         seed_user = User.new( seed_screen_name, seed_uid)
         users[seed_uid] = seed_user
+        followers_hash[seed_user.uid] = requestor.request_followers(seed_user.uid)
+        leaders_hash[seed_user.uid] = requestor.request_leaders(seed_user.uid)
+        puts "Seed user has #{followers_hash[seed_user.uid].count} followers and #{leaders_hash[seed_user.uid].count} leaders"
         while (users.keys.count < graph_size) do
             
             # Choose a random User from our current set
             rand_user = users[users.keys.sample]
             
             # Choose a random "graph edge" from among rand_user's followers and leaders
-            possible_connections = (rand_user.followers << rand_user.leaders).flatten
+            followers = followers_hash[rand_user.uid]
+            leaders = leaders_hash[rand_user.uid]
+            possible_connections = (followers << leaders).flatten
             possible_connections = possible_connections.to_set.to_a #Eliminate duplicates by converting to a Set (and then back to an Array).
+            puts "There are #{possible_connections.count} possible connections from #{rand_user.screen_name}"
             rand_connection = possible_connections.sample
             
             # If this follower/leader does not already belong to our current set,
-            if !users.keys.include?(rand_connection)
+            if ( rand_connection != nil ) and ( !users.keys.include?(rand_connection) )
                 # ...then we add him
                 new_user_name = requestor.request_screen_name(rand_connection)
+                puts 'Adding screen_name ' + new_user_name
                 new_user = User.new(new_user_name, rand_connection)
                 users[new_user.uid] = new_user
                 
                 # And with the introduction of a new User, we must connect any new graph edges
                 new_user_followers = requestor.request_followers(new_user.uid)
                 new_user_leaders = requestor.request_leaders(new_user.uid)
-                new_user_followers.each do |follower|
-                    if users.keys.include?(follower.uid)
-                        follower.follow new_user
+                
+                new_user_followers.each do |follower_uid|
+                    if users.keys.include?(follower_uid)
+                        follower = users[follower_uid]
+                        follower.follow(new_user)
                     end
                 end
-                new_user_leaders.each do |leader|
-                    if users.keys.include?(leader.uid)
+                new_user_leaders.each do |leader_uid|
+                    if users.keys.include?(leader_uid)
+                        leader = users[leader_uid]
                         new_user.follow leader
                     end
                 end
                 
+                followers_hash[new_user.uid] = new_user_followers
+                leaders_hash[new_user.uid] = new_user_leaders
             end
         end
         return TwitterGraph.new(users)
@@ -266,11 +294,18 @@ class GraphConstructor
     
 end
 
-puts 'Give me an initial screen name. (Omit the "@" sign.)'
-initial_screen_name = gets
-graph_constructor = GraphConstructor.new
-twitter_graph = graph_constructor.graph_with_initial_screen_name(initial_screen_name, 100)
-twitter_graph.compute_scores 35
+puts 'Give me an initial user name. (Omit the "@" sign.)'
+initial_screen_name = gets.chomp
+requestor = TwitterRequestor.new
+initial_uid = requestor.request_uid(initial_screen_name)
+official_name = requestor.request_screen_name(initial_uid)
+followers = requestor.request_followers(initial_uid)
+leaders = requestor.request_leaders(initial_uid)
 
+puts 'Constructing graph ---------------------------------------------------------------'
+graph_constructor = GraphConstructor.new
+twitter_graph = graph_constructor.graph_with_initial_screen_name(initial_screen_name, 38)
+puts 'Computing scores ---------------------------------------------------------------'
+twitter_graph.compute_scores 35
 
 
