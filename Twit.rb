@@ -124,6 +124,7 @@ class TwitterGraph
         # hash :uid => twit_rank
         @scores = {}
         
+        prepare_graph
     end
     
     def compute_scores(num_iterations)
@@ -166,6 +167,23 @@ class TwitterGraph
     
     def scores
         @scores
+    end
+    
+    private
+    
+    def prepare_graph
+        users.each do |uid, user|
+            
+            # If a user is not following anybody, then we pretend he is following EVERYBODY. "When calculating PageRank, pages with no outbound links are assumed to link out to all other pages in the collection. Their PageRank scores are therefore divided evenly among all other pages."
+            if (user.leaders.count == 0)
+                users.each do |uid, new_leader|
+                    user.follow(new_leader)
+                end
+            end
+            
+            # Give everyone a baseline score
+            user.twit_rank = 1.0 / Float(users.keys.count)
+        end
     end
     
 end
@@ -304,8 +322,19 @@ leaders = requestor.request_leaders(initial_uid)
 
 puts 'Constructing graph ---------------------------------------------------------------'
 graph_constructor = GraphConstructor.new
-twitter_graph = graph_constructor.graph_with_initial_screen_name(initial_screen_name, 38)
+twitter_graph = graph_constructor.graph_with_fake_users(graph_constructor.wikipedia_example)
+twitter_graph = graph_constructor.graph_with_initial_screen_name(initial_screen_name, 10)
 puts 'Computing scores ---------------------------------------------------------------'
 twitter_graph.compute_scores 35
+sorted_scores = twitter_graph.scores
+sorted_scores.sort_by { |uid, score| score }
+combined_score = 0.0
+sorted_scores.each do |uid, score|
+    combined_score += score
+    user = twitter_graph.users[uid]
+    puts "#{user.screen_name}: #{score} (#{user.followers.count} followers)"
+end
+puts 'Combined score = ' + combined_score.to_s
+
 
 
