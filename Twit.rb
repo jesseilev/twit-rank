@@ -323,7 +323,7 @@ leaders = requestor.request_leaders(initial_uid)
 puts 'Constructing graph ---------------------------------------------------------------'
 graph_constructor = GraphConstructor.new
 twitter_graph = graph_constructor.graph_with_fake_users(graph_constructor.wikipedia_example)
-twitter_graph = graph_constructor.graph_with_initial_screen_name(initial_screen_name, 10)
+#twitter_graph = graph_constructor.graph_with_initial_screen_name(initial_screen_name, 10)
 puts 'Computing scores ---------------------------------------------------------------'
 twitter_graph.compute_scores 35
 sorted_scores = twitter_graph.scores
