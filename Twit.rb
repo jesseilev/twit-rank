@@ -197,32 +197,22 @@ class GraphConstructor
     def initialize
     end
     
-    # Creates and returns a graph of real Users that includes the User whose .screen_name == seed_screen_name. This method uses randomness to build its set of Users, so even when you provide the same parameters, the exact set of Users will vary each time.
+    # Creates and returns a graph of real Users that includes the User whose .screen_name == seed_screen_name. This method uses randomness to build its set of Users, so even when you provide the same parameters, the exact set of Users will vary every time.
     def graph_with_initial_screen_name(seed_screen_name, graph_size)
         users = {}
         uids_hash = {}
-        followers_hash = {}
-        leaders_hash = {}
-        
         requestor = TwitterRequestor.new
         seed_uid = requestor.request_uid(seed_screen_name)
         seed_user = User.new( seed_screen_name, seed_uid)
         users[seed_uid] = seed_user
-        followers_hash[seed_user.uid] = requestor.request_followers(seed_user.uid)
-        leaders_hash[seed_user.uid] = requestor.request_leaders(seed_user.uid)
-        puts "Seed user has #{followers_hash[seed_user.uid].count} followers and #{leaders_hash[seed_user.uid].count} leaders"
+        seed_followers = requestor.request_followers(seed_user.uid)
+        seed_leaders = requestor.request_leaders(seed_user.uid)
+        all_graph_connections = (seed_followers << seed_leaders).flatten.to_set.to_a
+        
         while (users.keys.count < graph_size) do
             
-            # Choose a random User from our current set
-            rand_user = users[users.keys.sample]
-            
-            # Choose a random "graph edge" from among rand_user's followers and leaders
-            followers = followers_hash[rand_user.uid]
-            leaders = leaders_hash[rand_user.uid]
-            possible_connections = (followers << leaders).flatten
-            possible_connections = possible_connections.to_set.to_a #Eliminate duplicates by converting to a Set (and then back to an Array).
-            puts "There are #{possible_connections.count} possible connections from #{rand_user.screen_name}"
-            rand_connection = possible_connections.sample
+            #rand_connection = possible_connections.sample
+            rand_connection = all_graph_connections.sample
             
             # If this follower/leader does not already belong to our current set,
             if ( rand_connection != nil ) and ( !users.keys.include?(rand_connection) )
@@ -232,7 +222,7 @@ class GraphConstructor
                 new_user = User.new(new_user_name, rand_connection)
                 users[new_user.uid] = new_user
                 
-                # And with the introduction of a new User, we must connect any new graph edges
+                # And with the introduction of a new User, we must connect any new internal edges
                 new_user_followers = requestor.request_followers(new_user.uid)
                 new_user_leaders = requestor.request_leaders(new_user.uid)
                 
@@ -249,8 +239,8 @@ class GraphConstructor
                     end
                 end
                 
-                followers_hash[new_user.uid] = new_user_followers
-                leaders_hash[new_user.uid] = new_user_leaders
+                new_connections = (new_user_followers << new_user_leaders).flatten.to_set.to_a
+                all_graph_connections = (all_graph_connections << new_connections).flatten.to_set.to_a
             end
         end
         return TwitterGraph.new(users)
