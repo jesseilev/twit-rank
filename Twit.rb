@@ -16,19 +16,35 @@ class TwitterRequestor
     
     # Use cURL to ask Twitter for user's "friends". Return an array with the results
     def request_leaders(uid)
-        url = "https://api.twitter.com/1.1/friends/ids.json?cursor=-1&id=#{uid}"
-        response = send_request(url)
-        leaders = response['ids']
-        leaders = [] if leaders.nil? || leaders.empty?
+        leaders = []
+        cursor = -1
+        page_count = 0
+        until cursor == 0
+            url = "https://api.twitter.com/1.1/friends/ids.json?cursor=#{cursor}&id=#{uid}"
+            response = send_request(url)
+            additional_leaders = response['ids']
+            leaders = (leaders << additional_leaders).flatten
+            cursor = response['next_cursor']
+            puts "requesting leaders, on page #{page_count}"
+            page_count++
+        end
         leaders
     end
     
     # Use cURL to ask Twitter for user's "followers". Return an array with the results
     def request_followers(uid)
-        url = "https://api.twitter.com/1.1/followers/ids.json?cursor=-1&id=#{uid}"
-        response = send_request(url)
-        followers = response['ids']
-        followers = [] if followers.nil? || followers.empty?
+        followers = []
+        cursor = -1
+        page_count = 0
+        until cursor == 0
+            url = "https://api.twitter.com/1.1/followers/ids.json?cursor=#{cursor}&id=#{uid}"
+            response = send_request(url)
+            additional_followers = response['ids']
+            followers = (followers << additional_followers).flatten
+            cursor = response['next_cursor']
+            puts "requesting followers, on page #{page_count}"
+            page_count++
+        end
         followers
     end
     
@@ -314,7 +330,7 @@ leaders = requestor.request_leaders(initial_uid)
 puts 'Constructing graph ---------------------------------------------------------------'
 graph_constructor = GraphConstructor.new
 #twitter_graph = graph_constructor.graph_with_fake_users(graph_constructor.wikipedia_example)
-twitter_graph = graph_constructor.graph_with_initial_screen_name(initial_screen_name, 10)
+twitter_graph = graph_constructor.graph_with_initial_screen_name(initial_screen_name, 3)
 puts 'Computing scores ---------------------------------------------------------------'
 twitter_graph.compute_scores 35
 sorted_scores = twitter_graph.scores.sort_by { |uid, score| score }
