@@ -203,6 +203,7 @@ class GraphConstructor
         uids_hash = {}
         followers_hash = {}
         leaders_hash = {}
+        
         requestor = TwitterRequestor.new
         seed_uid = requestor.request_uid(seed_screen_name)
         seed_user = User.new( seed_screen_name, seed_uid)
@@ -322,17 +323,18 @@ leaders = requestor.request_leaders(initial_uid)
 
 puts 'Constructing graph ---------------------------------------------------------------'
 graph_constructor = GraphConstructor.new
-twitter_graph = graph_constructor.graph_with_fake_users(graph_constructor.wikipedia_example)
-#twitter_graph = graph_constructor.graph_with_initial_screen_name(initial_screen_name, 10)
+#twitter_graph = graph_constructor.graph_with_fake_users(graph_constructor.wikipedia_example)
+twitter_graph = graph_constructor.graph_with_initial_screen_name(initial_screen_name, 10)
 puts 'Computing scores ---------------------------------------------------------------'
 twitter_graph.compute_scores 35
-sorted_scores = twitter_graph.scores
-sorted_scores.sort_by { |uid, score| score }
+sorted_scores = twitter_graph.scores.sort_by { |uid, score| score }
 combined_score = 0.0
+puts 'Final Results -----------------------------------------------------------------'
 sorted_scores.each do |uid, score|
     combined_score += score
     user = twitter_graph.users[uid]
-    puts "#{user.screen_name}: #{score} (#{user.followers.count} followers)"
+    score_string = '%.3f' % score
+    puts "#{user.screen_name}: #{score_string} (#{user.followers.count} followers) "
 end
 puts 'Combined score = ' + combined_score.to_s
 
